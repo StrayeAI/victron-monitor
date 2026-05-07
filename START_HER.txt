@@ -1,0 +1,13 @@
+REV18 - Victron Monitor
+
+Endret i REV18:
+- Fjerner feil sammenligning mellom hovedprodukt og tilbehør.
+- Eksempel: Victron Lynx Power In skal ikke sammenlignes med Boltsett for Victron Lynx Power In til 99 kr.
+- Beholder live oppdateringsknappen fra REV13.
+- Beholder opplegget som fungerer hos deg: ingen pip og ingen .venv.
+
+Start:
+1. Lukk gamle CMD-vinduer fra tidligere REV.
+2. Åpne REV18-mappen.
+3. Dobbeltklikk start_all.bat.
+4. Trykk Oppdater nå for live prissjekk.
