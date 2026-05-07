@@ -17,6 +17,13 @@ HTML = r"""
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#06283b">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Victron Monitor">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
   <title>Victron Monitor REV19</title>
   <style>
     :root {
@@ -306,9 +313,54 @@ async function refreshNow() {
 }
 setInterval(loadData, 3000);
 loadData();
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
 </script>
 </body>
 </html>
+"""
+
+
+MANIFEST = {
+    "name": "Victron Monitor",
+    "short_name": "Victron",
+    "description": "Live prissjekk mot Makspower og utvalgte konkurrenter",
+    "start_url": "/",
+    "scope": "/",
+    "display": "standalone",
+    "background_color": "#06283b",
+    "theme_color": "#06283b",
+    "orientation": "any",
+    "icons": [
+        {"src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+        {"src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+    ]
+}
+
+SW = r"""
+const CACHE_NAME = 'victron-monitor-rev19-pwa-v1';
+const SHELL = ['/', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png'];
+self.addEventListener('install', event => {
+  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
+});
+self.addEventListener('activate', event => {
+  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+});
+self.addEventListener('fetch', event => {
+  const url = new URL(event.request.url);
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+  event.respondWith(fetch(event.request).then(response => {
+    const copy = response.clone();
+    caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
+    return response;
+  }).catch(() => caches.match(event.request).then(cached => cached || caches.match('/'))));
+});
 """
 
 STATE = {"refresh_running": False, "message": "Klar - trykk Oppdater nå for live prissjekk", "last_error": None, "log": []}
@@ -472,6 +524,14 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/health":
             return self.send_bytes(200, b'{"ok":true}', "application/json; charset=utf-8")
+        if path == "/manifest.json":
+            return self.send_bytes(200, json.dumps(MANIFEST, ensure_ascii=False).encode("utf-8"), "application/manifest+json; charset=utf-8")
+        if path == "/sw.js":
+            return self.send_bytes(200, SW.encode("utf-8"), "application/javascript; charset=utf-8")
+        if path.startswith("/icons/"):
+            icon_path = Path(__file__).parent / path.lstrip("/")
+            if icon_path.exists():
+                return self.send_bytes(200, icon_path.read_bytes(), "image/png")
         if path == "/" or path == "/index.html":
             return self.send_bytes(200, HTML.encode("utf-8"), "text/html; charset=utf-8")
         if path == "/api/data":
