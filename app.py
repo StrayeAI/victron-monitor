@@ -24,7 +24,7 @@ HTML = r"""
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" href="/icons/icon-192.png">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
-  <title>Victron Monitor REV19</title>
+  <title>Victron Monitor REV21</title>
   <style>
     :root {
       --bg:#06283b; --panel:#123b5c; --panel2:#0f3452; --head:#3474bc;
@@ -71,14 +71,45 @@ HTML = r"""
     .err { margin-top:10px; color:#ff8b8b; white-space:pre-wrap; }
     .details { margin-top:28px; }
     .nowrap { white-space:nowrap; }
+    .mobile-products { display:none; }
+    .mobile-product-card { background:var(--panel2); border:1px solid #1f4969; border-radius:12px; padding:14px; box-shadow:var(--shadow); }
+    .mobile-product-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:12px; }
+    .mobile-product-title { font-weight:900; font-size:15px; line-height:1.25; }
+    .mobile-price-list { display:grid; gap:8px; margin-top:10px; }
+    .mobile-price-row { display:flex; justify-content:space-between; gap:12px; padding:8px 0; border-top:1px solid rgba(255,255,255,.08); }
+    .mobile-price-row:first-child { border-top:0; }
+    .mobile-shop { color:var(--muted); font-weight:800; }
+    .mobile-footer { margin-top:12px; display:grid; gap:6px; color:#d6e4ef; font-size:12px; }
+    .best-badge { color:var(--green); font-weight:900; }
     @media (max-width: 900px) { .controls, .grid { grid-template-columns:1fr; } .wrap { padding:14px; } }
+    @media (max-width: 760px) {
+      body { background:#052338; }
+      .wrap { padding:10px; }
+      .brand { align-items:flex-start; gap:10px; margin-bottom:12px; }
+      .brand-logo { min-width:92px; min-height:46px; padding:6px 8px; border-radius:9px; }
+      .brand-logo img { max-width:86px; max-height:34px; }
+      .brand-title h1 { font-size:20px; line-height:1.1; }
+      .brand-title div { font-size:12px; }
+      .controls { position:sticky; top:0; z-index:10; background:rgba(5,35,56,.97); padding:8px 0; gap:8px; }
+      input, select, button { width:100%; height:44px; font-size:15px; }
+      h2 { font-size:18px; margin:18px 0 10px; }
+      .meta { font-size:12px; line-height:1.35; }
+      .logbox { max-height:92px; font-size:11px; }
+      .price-table, .details { display:none; }
+      .mobile-products { display:grid; gap:12px; }
+      .cards { grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px; }
+      .card { padding:10px; }
+      .card h3 { font-size:14px; margin-bottom:8px; }
+      .card div { font-size:12px; }
+      .pill { font-size:10px; padding:3px 7px; }
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="brand">
       <div class="brand-logo"><img src="https://makspower.no/wp-content/uploads/2024/01/makspower-drop-shadow-logo.png" alt="Makspower logo"></div>
-      <div class="brand-title"><h1>Victron Monitor REV19</h1><div>Live prissjekk mot Makspower og utvalgte konkurrenter</div></div>
+      <div class="brand-title"><h1>Victron Monitor REV21</h1><div>Live prissjekk mot Makspower og utvalgte konkurrenter</div></div>
     </div>
     <div class="controls">
       <input id="q" placeholder="Søk etter produkt..." oninput="render()">
@@ -98,7 +129,7 @@ HTML = r"""
     <div class="grid">
       <section>
         <h2>Beste priser</h2>
-        <table>
+        <table class="price-table">
           <thead>
             <tr>
               <th>Produkt</th><th>Kategori</th><th>Makspower</th><th>Seatronic</th><th>Sparelys</th><th>Batteriimport</th><th>BatteriButikken</th><th>Makspower sparer</th><th>Billigst</th>
@@ -106,6 +137,7 @@ HTML = r"""
           </thead>
           <tbody id="bestRows"></tbody>
         </table>
+        <div id="mobileProducts" class="mobile-products"></div>
       </section>
       <section>
         <h2>Butikker i oversikten</h2>
@@ -115,7 +147,7 @@ HTML = r"""
 
     <section class="details">
       <h2>Prisdetaljer per produkt</h2>
-      <table>
+      <table class="details-table">
         <thead>
           <tr>
             <th>Produkt</th><th>Kategori</th><th>Butikk</th><th>Pris</th><th>Mot Makspower</th><th>Lenke</th>
@@ -228,6 +260,7 @@ function render() {
   const logs = (st.log || []).slice(-12).map(x => `[${new Date(x.time).toLocaleTimeString('nb-NO')}] ${x.message}`).join('\n');
   document.getElementById('log').textContent = logs || st.message || 'Klar';
   renderBest(products);
+  renderMobileProducts(products);
   renderCards(products);
   renderDetails(products);
 }
@@ -279,7 +312,37 @@ function renderBest(products) {
       <td>${best ? esc(best.shop) : '–'}</td>`;
     rows.appendChild(tr);
   }
-}function renderCards(products) {
+}
+function mobilePriceRow(product, shop) {
+  const o = offerFor(product, shop);
+  const value = (!o || !validPrice(o.price)) ? '<span class="muted">–</span>' : `<a class="money" href="${esc(o.url || '')}" target="_blank">${fmtMoney(o.price)}</a>`;
+  return `<div class="mobile-price-row"><span class="mobile-shop">${esc(shop)}</span><span>${value}</span></div>`;
+}
+function renderMobileProducts(products) {
+  const box = document.getElementById('mobileProducts');
+  if (!box) return;
+  box.innerHTML = '';
+  const sorted = products.slice().sort((a,b) => {
+    const ba = bestOffer(a), bb = bestOffer(b);
+    return (ba?.price || 999999999) - (bb?.price || 999999999);
+  });
+  for (const p of sorted) {
+    const best = bestOffer(p);
+    const div = document.createElement('div');
+    div.className = 'mobile-product-card';
+    div.innerHTML = `<div class="mobile-product-head">
+        <div><div class="mobile-product-title">${esc(p.name)}</div>${p.sku ? `<div class="sku">${esc(p.sku)}</div>` : ''}</div>
+        <span class="pill">${esc(p.category || 'Ukjent')}</span>
+      </div>
+      <div class="mobile-price-list">${WANTED_SHOPS.map(shop => mobilePriceRow(p, shop)).join('')}</div>
+      <div class="mobile-footer">
+        <div>Billigst: <span class="best-badge">${best ? esc(best.shop) + ' – ' + fmtMoney(best.price) : '–'}</span></div>
+        <div>Makspower sparer: ${makspowerSavings(p)}</div>
+      </div>`;
+    box.appendChild(div);
+  }
+}
+function renderCards(products) {
   const cards = document.getElementById('shopCards'); cards.innerHTML = '';
   for (const shop of WANTED_SHOPS) {
     const offers = [];
@@ -341,7 +404,7 @@ MANIFEST = {
 }
 
 SW = r"""
-const CACHE_NAME = 'victron-monitor-rev19-pwa-v1';
+const CACHE_NAME = 'victron-monitor-rev21-pwa-v1';
 const SHELL = ['/', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -564,7 +627,7 @@ def auto_refresh_loop():
             threading.Thread(target=refresh_prices, daemon=True).start()
 
 if __name__ == "__main__":
-    print("Victron Monitor REV19 starter uten pip/venv")
+    print("Victron Monitor REV21 starter uten pip/venv")
     print("Apne: http://127.0.0.1:8765")
     print(f"Auto-oppdatering: hver {AUTO_REFRESH_INTERVAL // 3600} time(r)")
     threading.Thread(target=auto_refresh_loop, daemon=True).start()
